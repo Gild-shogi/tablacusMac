@@ -137,7 +137,7 @@ struct TabContent: View {
             }
             .contextMenu(forSelectionType: FileItem.ID.self) { ids in
                 if ids.isEmpty {
-                    Button("貼り付け") { FileOperations.paste(into: tab.url) }
+                    Button("貼り付け") { FileOperations.paste(into: tab.url, selectedFolder: nil) }
                     Button("新規フォルダ") { tab.createFolder() }
                 } else {
                     Button("開く") { tab.open(ids) }
@@ -152,7 +152,7 @@ struct TabContent: View {
             } primaryAction: { tab.open($0) }
             .onCopyCommand { providers(cut: false) }
             .onCutCommand { providers(cut: true) }
-            .onPasteCommand(of: [.fileURL]) { _ in FileOperations.paste(into: tab.url) }
+            .onPasteCommand(of: [.fileURL]) { _ in FileOperations.paste(into: tab.url, selectedFolder: tab.selectedFolder) }
             .onKeyPress(.return) { tab.open(tab.selection); return .handled }
             .onKeyPress(Self.f2) {
                 guard tab.selection.count == 1 else { return .ignored }

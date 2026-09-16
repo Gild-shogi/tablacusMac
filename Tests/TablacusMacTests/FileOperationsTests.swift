@@ -41,3 +41,26 @@ private func makeTemporaryFolder() throws -> URL {
 
     #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == ["a.txt"])
 }
+
+@Test func 選択中のフォルダがあればその中へ貼り付け_貼り付ける項目自身なら表示中のフォルダへ複製する() {
+    let current = URL(fileURLWithPath: "/work")
+    let selected = URL(fileURLWithPath: "/work/sub/", isDirectory: true)
+    let file = URL(fileURLWithPath: "/other/a.txt")
+
+    #expect(pasteDestination(for: [file], current: current, selectedFolder: selected) == selected)
+    #expect(pasteDestination(for: [URL(fileURLWithPath: "/work/sub")], current: current, selectedFolder: selected) == current)
+    #expect(pasteDestination(for: [file], current: current, selectedFolder: nil) == current)
+}
+
+@Test func 複製をさらに複製すると番号が続きになり_元の名前がなければ名前の一部として扱う() throws {
+    let root = try makeTemporaryFolder()
+    for name in ["a.txt", "a-1.txt", "report-2024.pdf"] {
+        try "x".write(to: root.appendingPathComponent(name), atomically: true, encoding: .utf8)
+    }
+
+    try transfer([root.appendingPathComponent("a-1.txt")], to: root, .copy)
+    try transfer([root.appendingPathComponent("report-2024.pdf")], to: root, .copy)
+
+    let names = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
+    #expect(names == ["a.txt", "a-1.txt", "a-2.txt", "report-2024.pdf", "report-2024-1.pdf"])
+}

@@ -10,16 +10,25 @@ struct FileOperationError: LocalizedError {
 
 /// 同名の項目があれば「名前-1.拡張子」「名前-2.拡張子」…の形で空いている名前を返す
 func uniqueURL(for name: String, in folder: URL) -> URL {
-    let base = (name as NSString).deletingPathExtension
+    let original = folder.appendingPathComponent(name)
+    guard FileManager.default.fileExists(atPath: original.path) else { return original }
+
     let ext = (name as NSString).pathExtension
-    var candidate = folder.appendingPathComponent(name)
+    func candidate(_ base: String) -> URL {
+        folder.appendingPathComponent(ext.isEmpty ? base : "\(base).\(ext)")
+    }
+    var base = (name as NSString).deletingPathExtension
     var number = 1
-    while FileManager.default.fileExists(atPath: candidate.path) {
-        let numbered = "\(base)-\(number)"
-        candidate = folder.appendingPathComponent(ext.isEmpty ? numbered : "\(numbered).\(ext)")
+    // 「a-1.txt」の複製は「a-2.txt」にする。元の「a.txt」が無ければ「report-2024」のような名前の一部とみなす
+    if let dash = base.lastIndex(of: "-"), let copyNumber = Int(base[base.index(after: dash)...]),
+       FileManager.default.fileExists(atPath: candidate(String(base[..<dash])).path) {
+        base = String(base[..<dash])
+        number = copyNumber + 1
+    }
+    while FileManager.default.fileExists(atPath: candidate("\(base)-\(number)").path) {
         number += 1
     }
-    return candidate
+    return candidate("\(base)-\(number)")
 }
 
 /// 既存の項目は上書きせず、同名があれば別名で残す
@@ -37,6 +46,14 @@ func transfer(_ sources: [URL], to folder: URL, _ operation: FileOperation) thro
         case .move: try FileManager.default.moveItem(at: source, to: destination)
         }
     }
+}
+
+/// 選択中のフォルダの中へ貼り付ける。ただし貼り付ける項目自身が選ばれていれば複製とみなし表示中のフォルダへ
+func pasteDestination(for sources: [URL], current: URL, selectedFolder: URL?) -> URL {
+    guard let selectedFolder, !sources.contains(where: { $0.standardizedFileURL.path == selectedFolder.standardizedFileURL.path }) else {
+        return current
+    }
+    return selectedFolder
 }
 
 func isSameVolume(_ a: URL, _ b: URL) -> Bool {
@@ -66,12 +83,12 @@ enum FileOperations {
         perform(sources, to: folder, copies ? .copy : .move)
     }
 
-    static func paste(into folder: URL) {
+    static func paste(into current: URL, selectedFolder: URL?) {
         let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
         guard !urls.isEmpty else { return }
         let isCut = Set(urls.map(\.path)) == cutPaths
         if isCut { cutPaths = [] }
-        perform(urls, to: folder, isCut ? .move : .copy)
+        perform(urls, to: pasteDestination(for: urls, current: current, selectedFolder: selectedFolder), isCut ? .move : .copy)
     }
 
     /// NSWorkspace.recycle は複数件を一度に捨てると先頭の1件しか「戻す」が効かないため Finder に任せる

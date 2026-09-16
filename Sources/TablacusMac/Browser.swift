@@ -137,6 +137,9 @@ final class Tab: Identifiable {
         }
     }
 
+    /// 複数選択やファイル混じりのときは貼り付け先を決められないので nil
+    var selectedFolder: URL? { selection.count == 1 ? folders(in: selection).first : nil }
+
     func folders(in ids: Set<FileItem.ID>) -> [URL] {
         items.filter { ids.contains($0.id) && $0.isFolder }.map(\.url)
     }
