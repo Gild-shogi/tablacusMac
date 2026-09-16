@@ -16,6 +16,8 @@ struct TablacusMacApp: App {
                 // 標準の「閉じる」より前に置くことで ⌘W をタブ閉じに割り当てる
                 Button("タブを閉じる") { if let browser { browser.active.close(browser.tab) } }
                     .keyboardShortcut("w")
+                Button("新規フォルダ") { browser?.tab.createFolder() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
             }
             CommandGroup(after: .sidebar) {
                 Button("画面分割") { browser?.toggleSplit() }

@@ -20,3 +20,4 @@ app:
 	plutil -insert CFBundleIdentifier -string local.tablacus-mac $(APP)/Contents/Info.plist
 	plutil -insert CFBundleName -string TablacusMac $(APP)/Contents/Info.plist
 	plutil -insert CFBundlePackageType -string APPL $(APP)/Contents/Info.plist
+	plutil -insert NSAppleEventsUsageDescription -string "ゴミ箱に入れた項目を「戻す」で復元できるよう、削除を Finder に依頼します" $(APP)/Contents/Info.plist

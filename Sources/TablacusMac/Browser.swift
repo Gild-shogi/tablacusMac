@@ -58,14 +58,19 @@ final class Tab: Identifiable {
     private(set) var items: [FileItem] = []
     private(set) var error: String?
     var selection = Set<FileItem.ID>()
+    var renaming: URL?
+    // deinit から止めるため。DispatchSource 自体はスレッドセーフ
+    @ObservationIgnored nonisolated(unsafe) private var watcher: DispatchSourceFileSystemObject?
     var sortOrder = [KeyPathComparator(\FileItem.name, comparator: .localizedStandard)] {
         didSet { items.sort(using: sortOrder) }
     }
 
     init(_ url: URL) {
         history = History(url)
-        reload()
+        didNavigate()
     }
+
+    deinit { watcher?.cancel() }
 
     var url: URL { history.current }
     var title: String { FileManager.default.displayName(atPath: url.path) }
@@ -86,13 +91,51 @@ final class Tab: Identifiable {
 
     func go(to url: URL) {
         history.visit(url.standardizedFileURL)
-        selection = []
-        reload()
+        didNavigate()
     }
 
-    func goBack() { history.goBack(); reload() }
-    func goForward() { history.goForward(); reload() }
+    func goBack() { history.goBack(); didNavigate() }
+    func goForward() { history.goForward(); didNavigate() }
     func goUp() { if url.path != "/" { go(to: url.deletingLastPathComponent()) } }
+
+    private func didNavigate() {
+        selection = []
+        reload()
+        watcher?.cancel()
+        let descriptor = Darwin.open(url.path, O_EVTONLY)
+        guard descriptor >= 0 else { watcher = nil; return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: .main)
+        source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.reload() } }
+        source.setCancelHandler { Darwin.close(descriptor) }
+        source.resume()
+        watcher = source
+    }
+
+    func createFolder() {
+        let folder = uniqueURL(for: "名称未設定フォルダ", in: url)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+            reload()
+            selection = Set(items.filter { $0.url.path == folder.path }.map(\.id))
+            renaming = folder
+        } catch {
+            FileOperations.showError(error.localizedDescription)
+        }
+    }
+
+    func rename(_ source: URL, to name: String) {
+        guard name != source.lastPathComponent else { return }
+        guard !name.isEmpty, !name.contains("/") else {
+            FileOperations.showError("「\(name)」は名前に使えません")
+            return
+        }
+        // moveItem は移動先が既にあればエラーになるので上書きは起きない
+        do {
+            try FileManager.default.moveItem(at: source, to: source.deletingLastPathComponent().appendingPathComponent(name))
+        } catch {
+            FileOperations.showError(error.localizedDescription)
+        }
+    }
 
     func folders(in ids: Set<FileItem.ID>) -> [URL] {
         items.filter { ids.contains($0.id) && $0.isFolder }.map(\.url)

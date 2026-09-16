@@ -78,6 +78,7 @@ struct TabContent: View {
     @Bindable var tab: Tab
     let focus: FocusState<Pane.ID?>.Binding
     @State private var path = ""
+    @State private var newName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -99,7 +100,7 @@ struct TabContent: View {
                 Text(error).foregroundStyle(.red).padding(6)
             }
 
-            Table(tab.items, selection: $tab.selection, sortOrder: $tab.sortOrder) {
+            Table(of: FileItem.self, selection: $tab.selection, sortOrder: $tab.sortOrder) {
                 TableColumn("名前", value: \.name, comparator: .localizedStandard) { item in
                     Label { Text(item.name) } icon: { FileIcon(url: item.url) }
                 }
@@ -108,18 +109,68 @@ struct TabContent: View {
                 TableColumn("サイズ", value: \.size) { item in
                     Text(item.isFolder ? "" : item.size.formatted(.byteCount(style: .file)))
                 }
+            } rows: {
+                ForEach(tab.items) { item in
+                    TableRow(item)
+                        .draggable(item.url)
+                        .dropDestination(for: URL.self) { urls in
+                            FileOperations.drop(urls, into: item.isFolder ? item.url : tab.url)
+                        }
+                }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                FileOperations.drop(urls, into: tab.url)
+                return true
             }
             .contextMenu(forSelectionType: FileItem.ID.self) { ids in
-                Button("開く") { tab.open(ids) }
-                Button("新しいタブで開く") { for folder in tab.folders(in: ids) { pane.newTab(folder) } }
-                    .disabled(tab.folders(in: ids).isEmpty)
-                Button("Finderで表示") { NSWorkspace.shared.activateFileViewerSelecting(Array(ids)) }
+                if ids.isEmpty {
+                    Button("貼り付け") { FileOperations.paste(into: tab.url) }
+                    Button("新規フォルダ") { tab.createFolder() }
+                } else {
+                    Button("開く") { tab.open(ids) }
+                    Button("新しいタブで開く") { for folder in tab.folders(in: ids) { pane.newTab(folder) } }
+                        .disabled(tab.folders(in: ids).isEmpty)
+                    Button("Finderで表示") { NSWorkspace.shared.activateFileViewerSelecting(Array(ids)) }
+                    Divider()
+                    Button("名前を変更") { tab.renaming = ids.first }
+                        .disabled(ids.count != 1)
+                    Button("ゴミ箱に入れる") { FileOperations.trash(Array(ids)) }
+                }
             } primaryAction: { tab.open($0) }
+            .onCopyCommand { providers(cut: false) }
+            .onCutCommand { providers(cut: true) }
+            .onPasteCommand(of: [.fileURL]) { _ in FileOperations.paste(into: tab.url) }
             .onKeyPress(.return) { tab.open(tab.selection); return .handled }
-            .onKeyPress(.delete) { tab.goUp(); return .handled }
+            .onKeyPress(Self.f2) {
+                guard tab.selection.count == 1 else { return .ignored }
+                tab.renaming = tab.selection.first
+                return .handled
+            }
+            // Tablacus（Explorer）に合わせ ⌫ は上の階層へ。⌘⌫ と ⌦ はゴミ箱
+            .onKeyPress(keys: [.delete, .deleteForward]) { press in
+                if press.key == .delete && !press.modifiers.contains(.command) {
+                    tab.goUp()
+                } else {
+                    FileOperations.trash(Array(tab.selection))
+                }
+                return .handled
+            }
             .focused(focus, equals: pane.id)
         }
         .onChange(of: tab.url, initial: true) { path = tab.url.path }
+        .onChange(of: tab.renaming) { newName = tab.renaming?.lastPathComponent ?? "" }
+        .alert("名前を変更", isPresented: Binding(get: { tab.renaming != nil }, set: { if !$0 { tab.renaming = nil } })) {
+            TextField("名前", text: $newName)
+            Button("変更") { if let url = tab.renaming { tab.rename(url, to: newName) } }
+            Button("キャンセル", role: .cancel) {}
+        }
+    }
+
+    private static let f2 = KeyEquivalent(Character(UnicodeScalar(UInt32(NSF2FunctionKey))!))
+
+    private func providers(cut: Bool) -> [NSItemProvider] {
+        FileOperations.cutPaths = cut ? Set(tab.selection.map(\.path)) : []
+        return tab.selection.map { NSItemProvider(object: $0 as NSURL) }
     }
 
     private func openTypedPath() {
