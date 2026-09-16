@@ -178,15 +178,38 @@ final class Pane: Identifiable {
     }
 }
 
+enum Layout: String, CaseIterable, Identifiable {
+    case single = "1画面"
+    case columns = "左右2画面"
+    case rows = "上下2画面"
+    case threeColumns = "3列"
+    case grid = "2×2"
+
+    var id: Self { self }
+
+    var paneCount: Int {
+        switch self {
+        case .single: 1
+        case .columns, .rows: 2
+        case .threeColumns: 3
+        case .grid: 4
+        }
+    }
+}
+
 @Observable @MainActor
 final class Browser {
+    // 画面数を減らしてもペインは破棄せず隠すだけにし、戻したときにタブを復元する
     private(set) var panes = [Pane(.homeDirectory)]
+    private(set) var layout = Layout.single
     var activeID: Pane.ID?
 
-    var active: Pane { panes.first { $0.id == activeID } ?? panes[0] }
+    var visiblePanes: [Pane] { Array(panes.prefix(layout.paneCount)) }
+    var active: Pane { visiblePanes.first { $0.id == activeID } ?? panes[0] }
     var tab: Tab { active.selected }
 
-    func toggleSplit() {
-        if panes.count == 1 { panes.append(Pane(tab.url)) } else { panes.removeLast() }
+    func setLayout(_ layout: Layout) {
+        while panes.count < layout.paneCount { panes.append(Pane(tab.url)) }
+        self.layout = layout
     }
 }

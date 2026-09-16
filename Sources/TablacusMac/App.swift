@@ -20,8 +20,10 @@ struct TablacusMacApp: App {
                     .keyboardShortcut("n", modifiers: [.command, .shift])
             }
             CommandGroup(after: .sidebar) {
-                Button("画面分割") { browser?.toggleSplit() }
-                    .keyboardShortcut("\\")
+                ForEach(Array(Layout.allCases.enumerated()), id: \.element) { index, layout in
+                    Toggle(layout.rawValue, isOn: Binding(get: { browser?.layout == layout }, set: { _ in browser?.setLayout(layout) }))
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                }
             }
             CommandMenu("移動") {
                 Button("戻る") { browser?.tab.goBack() }.keyboardShortcut("[")

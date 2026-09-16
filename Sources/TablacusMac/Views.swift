@@ -9,6 +9,15 @@ struct BrowserView: View {
         return favorites + (FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: .skipHiddenVolumes) ?? [])
     }
 
+    private func paneView(_ pane: Pane) -> some View {
+        PaneView(pane: pane, focus: $focusedPane)
+            .overlay(alignment: .top) {
+                if browser.layout != .single, pane.id == browser.active.id {
+                    Color.accentColor.frame(height: 2)
+                }
+            }
+    }
+
     var body: some View {
         NavigationSplitView {
             List(places, id: \.self) { url in
@@ -18,14 +27,18 @@ struct BrowserView: View {
                 .buttonStyle(.plain)
             }
         } detail: {
-            HSplitView {
-                ForEach(browser.panes) { pane in
-                    PaneView(pane: pane, focus: $focusedPane)
-                        .overlay(alignment: .top) {
-                            if browser.panes.count > 1, pane.id == browser.active.id {
-                                Color.accentColor.frame(height: 2)
-                            }
-                        }
+            let panes = browser.visiblePanes
+            switch browser.layout {
+            case .single:
+                paneView(panes[0])
+            case .columns, .threeColumns:
+                HSplitView { ForEach(panes) { paneView($0) } }
+            case .rows:
+                VSplitView { ForEach(panes) { paneView($0) } }
+            case .grid:
+                VSplitView {
+                    HSplitView { paneView(panes[0]); paneView(panes[1]) }
+                    HSplitView { paneView(panes[2]); paneView(panes[3]) }
                 }
             }
         }
