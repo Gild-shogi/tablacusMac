@@ -95,19 +95,23 @@ struct TabContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button { tab.goBack() } label: { Image(systemName: "chevron.left") }
-                    .disabled(tab.history.back.isEmpty)
-                Button { tab.goForward() } label: { Image(systemName: "chevron.right") }
-                    .disabled(tab.history.forward.isEmpty)
+            HStack(spacing: 8) {
+                ControlGroup {
+                    Button { tab.goBack() } label: { Image(systemName: "chevron.left") }
+                        .disabled(tab.history.back.isEmpty)
+                    Button { tab.goForward() } label: { Image(systemName: "chevron.right") }
+                        .disabled(tab.history.forward.isEmpty)
+                }
+                .fixedSize()
                 Button { tab.goUp() } label: { Image(systemName: "arrow.up") }
                     .disabled(tab.url.path == "/")
                 TextField("パス", text: $path)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(openTypedPath)
             }
-            .buttonStyle(.borderless)
-            .padding(6)
+            .controlSize(.large)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
 
             if let error = tab.error {
                 Text(error).foregroundStyle(.red).padding(6)
