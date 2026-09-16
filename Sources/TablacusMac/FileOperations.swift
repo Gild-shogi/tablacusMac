@@ -8,14 +8,14 @@ struct FileOperationError: LocalizedError {
     let errorDescription: String?
 }
 
-/// 同名の項目があれば Finder と同じく「名前 2.拡張子」の形で空いている名前を返す
+/// 同名の項目があれば「名前-1.拡張子」「名前-2.拡張子」…の形で空いている名前を返す
 func uniqueURL(for name: String, in folder: URL) -> URL {
     let base = (name as NSString).deletingPathExtension
     let ext = (name as NSString).pathExtension
     var candidate = folder.appendingPathComponent(name)
-    var number = 2
+    var number = 1
     while FileManager.default.fileExists(atPath: candidate.path) {
-        let numbered = "\(base) \(number)"
+        let numbered = "\(base)-\(number)"
         candidate = folder.appendingPathComponent(ext.isEmpty ? numbered : "\(numbered).\(ext)")
         number += 1
     }

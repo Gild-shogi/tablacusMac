@@ -8,7 +8,7 @@ private func makeTemporaryFolder() throws -> URL {
     return folder
 }
 
-@Test func 同名の項目があるとき上書きせず番号付きの名前でコピーする() throws {
+@Test func 同名の項目があるとき上書きせず名前の後ろにハイフンと番号を付けてコピーする() throws {
     let root = try makeTemporaryFolder()
     let source = try makeTemporaryFolder()
     try "元".write(to: root.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
@@ -18,8 +18,8 @@ private func makeTemporaryFolder() throws -> URL {
     try transfer([source.appendingPathComponent("a.txt")], to: root, .copy)
 
     #expect(try String(contentsOf: root.appendingPathComponent("a.txt"), encoding: .utf8) == "元")
-    #expect(try String(contentsOf: root.appendingPathComponent("a 2.txt"), encoding: .utf8) == "新")
-    #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("a 3.txt").path))
+    #expect(try String(contentsOf: root.appendingPathComponent("a-1.txt"), encoding: .utf8) == "新")
+    #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("a-2.txt").path))
 }
 
 @Test func フォルダを自分の配下へ移動しようとするとエラーになり元のまま残る() throws {
