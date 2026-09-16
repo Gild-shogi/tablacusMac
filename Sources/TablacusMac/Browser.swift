@@ -79,7 +79,7 @@ final class Tab: Identifiable {
         do {
             // ponytail: メインスレッドで同期列挙。数万件のフォルダで固まるようなら Task.detached へ移す
             items = try FileManager.default
-                .contentsOfDirectory(at: url, includingPropertiesForKeys: Array(FileItem.keys), options: .skipsHiddenFiles)
+                .contentsOfDirectory(at: url, includingPropertiesForKeys: Array(FileItem.keys))
                 .map(FileItem.init)
                 .sorted(using: sortOrder)
             error = nil

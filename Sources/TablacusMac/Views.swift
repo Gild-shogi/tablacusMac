@@ -139,11 +139,17 @@ struct TabContent: View {
                 if ids.isEmpty {
                     Button("貼り付け") { FileOperations.paste(into: tab.url, selectedFolder: nil) }
                     Button("新規フォルダ") { tab.createFolder() }
+                    Divider()
+                    Button("パスをコピー") { copyPaths([tab.url]) }
+                    Button("Orcaで開く") { Orca.open(tab.url) }
                 } else {
                     Button("開く") { tab.open(ids) }
                     Button("新しいタブで開く") { for folder in tab.folders(in: ids) { pane.newTab(folder) } }
                         .disabled(tab.folders(in: ids).isEmpty)
                     Button("Finderで表示") { NSWorkspace.shared.activateFileViewerSelecting(Array(ids)) }
+                    Divider()
+                    Button("パスをコピー") { copyPaths(Array(ids)) }
+                    Button("Orcaで開く") { Orca.open(ids.count == 1 ? tab.folders(in: ids).first ?? tab.url : tab.url) }
                     Divider()
                     Button("名前を変更") { tab.renaming = ids.first }
                         .disabled(ids.count != 1)
@@ -180,6 +186,11 @@ struct TabContent: View {
     }
 
     private static let f2 = KeyEquivalent(Character(UnicodeScalar(UInt32(NSF2FunctionKey))!))
+
+    private func copyPaths(_ urls: [URL]) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(urls.map(\.path).sorted().joined(separator: "\n"), forType: .string)
+    }
 
     private func providers(cut: Bool) -> [NSItemProvider] {
         FileOperations.cutPaths = cut ? Set(tab.selection.map(\.path)) : []
