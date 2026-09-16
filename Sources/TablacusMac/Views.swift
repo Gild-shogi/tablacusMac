@@ -159,10 +159,15 @@ struct TabContent: View {
             .onCopyCommand { providers(cut: false) }
             .onCutCommand { providers(cut: true) }
             .onPasteCommand(of: [.fileURL]) { _ in FileOperations.paste(into: tab.url, selectedFolder: tab.selectedFolder) }
-            .onKeyPress(.return) { tab.open(tab.selection); return .handled }
-            .onKeyPress(Self.f2) {
+            // Finder と同じく Return は名前変更、⌘↓ で開く
+            .onKeyPress(keys: [.return, Self.f2]) { _ in
                 guard tab.selection.count == 1 else { return .ignored }
                 tab.renaming = tab.selection.first
+                return .handled
+            }
+            .onKeyPress(keys: [.downArrow]) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                tab.open(tab.selection)
                 return .handled
             }
             // Tablacus（Explorer）に合わせ ⌫ は上の階層へ。⌘⌫ と ⌦ はゴミ箱
