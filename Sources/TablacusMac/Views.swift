@@ -4,11 +4,6 @@ struct BrowserView: View {
     @State private var browser = Browser()
     @FocusState private var focusedPane: Pane.ID?
 
-    private var places: [URL] {
-        let favorites: [URL] = [.homeDirectory, .desktopDirectory, .documentsDirectory, .downloadsDirectory, URL(fileURLWithPath: "/Applications")]
-        return favorites + (FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: .skipHiddenVolumes) ?? [])
-    }
-
     private func paneView(_ pane: Pane) -> some View {
         PaneView(pane: pane, focus: $focusedPane)
             .overlay(alignment: .top) {
@@ -20,12 +15,7 @@ struct BrowserView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(places, id: \.self) { url in
-                Button { browser.tab.go(to: url) } label: {
-                    Label { Text(FileManager.default.displayName(atPath: url.path)) } icon: { FileIcon(url: url) }
-                }
-                .buttonStyle(.plain)
-            }
+            SidebarView(browser: browser)
         } detail: {
             let panes = browser.visiblePanes
             switch browser.layout {
