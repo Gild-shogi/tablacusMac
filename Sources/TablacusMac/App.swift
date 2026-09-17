@@ -19,6 +19,10 @@ struct TablacusMacApp: App {
                 Button("新規フォルダ") { browser?.tab.createFolder() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
             }
+            CommandGroup(after: .textEditing) {
+                Button("絞り込み") { browser?.tab.wantsFilterFocus = true }
+                    .keyboardShortcut("f")
+            }
             CommandGroup(after: .sidebar) {
                 ForEach(Array(Layout.allCases.enumerated()), id: \.element) { index, layout in
                     Toggle(layout.rawValue, isOn: Binding(get: { browser?.layout == layout }, set: { _ in browser?.setLayout(layout) }))

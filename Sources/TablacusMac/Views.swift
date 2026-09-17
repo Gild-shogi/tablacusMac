@@ -96,6 +96,7 @@ struct TabContent: View {
     let focus: FocusState<Pane.ID?>.Binding
     @State private var path = ""
     @State private var newName = ""
+    @FocusState private var isFilterFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,6 +113,15 @@ struct TabContent: View {
                 TextField("パス", text: $path)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(openTypedPath)
+                TextField("絞り込み（⌘F）", text: $tab.filter)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .focused($isFilterFocused)
+                    .onSubmit { focus.wrappedValue = pane.id }
+                    .onExitCommand {
+                        tab.filter = ""
+                        focus.wrappedValue = pane.id
+                    }
             }
             .controlSize(.large)
             .padding(.horizontal, 8)
@@ -131,7 +141,7 @@ struct TabContent: View {
                     Text(item.isFolder ? "" : item.size.formatted(.byteCount(style: .file)))
                 }
             } rows: {
-                ForEach(tab.items) { item in
+                ForEach(tab.visibleItems) { item in
                     TableRow(item)
                         .draggable(item.url)
                         .dropDestination(for: URL.self) { urls in
@@ -190,6 +200,11 @@ struct TabContent: View {
             .focused(focus, equals: pane.id)
         }
         .onChange(of: tab.url, initial: true) { path = tab.url.path }
+        .onChange(of: tab.wantsFilterFocus) {
+            guard tab.wantsFilterFocus else { return }
+            isFilterFocused = true
+            tab.wantsFilterFocus = false
+        }
         .onChange(of: tab.renaming) { newName = tab.renaming?.lastPathComponent ?? "" }
         .alert("名前を変更", isPresented: Binding(get: { tab.renaming != nil }, set: { if !$0 { tab.renaming = nil } })) {
             TextField("名前", text: $newName)

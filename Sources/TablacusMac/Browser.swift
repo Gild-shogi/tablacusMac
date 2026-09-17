@@ -59,6 +59,11 @@ final class Tab: Identifiable {
     private(set) var error: String?
     var selection = Set<FileItem.ID>()
     var renaming: URL?
+    var wantsFilterFocus = false
+    var filter = "" {
+        // 見えない項目を選択したままゴミ箱などの操作をしないよう、絞り込みで隠れたら選択から外す
+        didSet { selection.formIntersection(visibleItems.map(\.id)) }
+    }
     // deinit から止めるため。DispatchSource 自体はスレッドセーフ
     @ObservationIgnored nonisolated(unsafe) private var watcher: DispatchSourceFileSystemObject?
     var sortOrder = [KeyPathComparator(\FileItem.name, comparator: .localizedStandard)] {
@@ -74,6 +79,11 @@ final class Tab: Identifiable {
 
     var url: URL { history.current }
     var title: String { FileManager.default.displayName(atPath: url.path) }
+
+    var visibleItems: [FileItem] {
+        let terms = filter.split(whereSeparator: \.isWhitespace)
+        return terms.isEmpty ? items : items.filter { item in terms.allSatisfy { item.name.localizedStandardContains($0) } }
+    }
 
     func reload() {
         do {
@@ -99,6 +109,7 @@ final class Tab: Identifiable {
     func goUp() { if url.path != "/" { go(to: url.deletingLastPathComponent()) } }
 
     private func didNavigate() {
+        filter = ""
         selection = []
         reload()
         watcher?.cancel()
