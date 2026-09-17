@@ -160,11 +160,13 @@ final class Pane: Identifiable {
     private(set) var tabs: [Tab]
     var selectedID: Tab.ID
 
-    init(_ url: URL) {
-        let tab = Tab(url)
-        tabs = [tab]
-        selectedID = tab.id
+    init(urls: [URL], selected: Int) {
+        let tabs = (urls.isEmpty ? [.homeDirectory] : urls).map(Tab.init)
+        self.tabs = tabs
+        selectedID = tabs[min(max(selected, 0), tabs.count - 1)].id
     }
+
+    convenience init(_ url: URL) { self.init(urls: [url], selected: 0) }
 
     var selected: Tab { tabs.first { $0.id == selectedID } ?? tabs[0] }
 
@@ -181,7 +183,7 @@ final class Pane: Identifiable {
     }
 }
 
-enum Layout: String, CaseIterable, Identifiable {
+enum Layout: String, CaseIterable, Identifiable, Codable {
     case single = "1画面"
     case columns = "左右2画面"
     case rows = "上下2画面"
@@ -203,9 +205,26 @@ enum Layout: String, CaseIterable, Identifiable {
 @Observable @MainActor
 final class Browser {
     // 画面数を減らしてもペインは破棄せず隠すだけにし、戻したときにタブを復元する
-    private(set) var panes = [Pane(.homeDirectory)]
+    private(set) var panes: [Pane]
     private(set) var layout = Layout.single
     var activeID: Pane.ID?
+
+    init(restoring state: BrowserState? = nil) {
+        let panes = state?.panes.map { Pane(urls: $0.tabs.map { URL(fileURLWithPath: $0) }, selected: $0.selected) } ?? []
+        self.panes = panes.isEmpty ? [Pane(.homeDirectory)] : panes
+        setLayout(state?.layout ?? .single)
+        if let active = state?.active, self.panes.indices.contains(active) { activeID = self.panes[active].id }
+    }
+
+    var state: BrowserState {
+        BrowserState(
+            layout: layout,
+            panes: panes.map { pane in
+                BrowserState.PaneState(tabs: pane.tabs.map(\.url.path), selected: pane.tabs.firstIndex { $0.id == pane.selectedID } ?? 0)
+            },
+            active: panes.firstIndex { $0.id == active.id } ?? 0
+        )
+    }
 
     var visiblePanes: [Pane] { Array(panes.prefix(layout.paneCount)) }
     var active: Pane { visiblePanes.first { $0.id == activeID } ?? panes[0] }
@@ -214,5 +233,30 @@ final class Browser {
     func setLayout(_ layout: Layout) {
         while panes.count < layout.paneCount { panes.append(Pane(tab.url)) }
         self.layout = layout
+    }
+}
+
+struct BrowserState: Codable, Equatable {
+    struct PaneState: Codable, Equatable {
+        var tabs: [String]
+        var selected: Int
+    }
+
+    private static let key = "browserState"
+    @MainActor private static var isRestored = false
+
+    var layout: Layout
+    var panes: [PaneState]
+    var active: Int
+
+    /// ponytail: 保存する状態は1つだけ。最初のウィンドウだけ復元し、⌘N の新規ウィンドウはホームから始める
+    @MainActor static func restoreOnce() -> BrowserState? {
+        guard !isRestored else { return nil }
+        isRestored = true
+        return UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(Self.self, from: $0) }
+    }
+
+    func save() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(self), forKey: Self.key)
     }
 }

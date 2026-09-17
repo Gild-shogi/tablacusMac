@@ -1,7 +1,21 @@
 import SwiftUI
 
 struct BrowserView: View {
-    @State private var browser = Browser()
+    // @State の初期値は View の再生成のたびに評価されるため、ディレクトリ読み込みを伴う Browser は表示時に一度だけ作る
+    @State private var browser: Browser?
+
+    var body: some View {
+        if let browser {
+            BrowserContent(browser: browser)
+                .onChange(of: browser.state) { _, state in state.save() }
+        } else {
+            Color.clear.onAppear { browser = Browser(restoring: .restoreOnce()) }
+        }
+    }
+}
+
+struct BrowserContent: View {
+    let browser: Browser
     @FocusState private var focusedPane: Pane.ID?
 
     private func paneView(_ pane: Pane) -> some View {
