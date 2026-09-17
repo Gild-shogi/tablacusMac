@@ -35,6 +35,9 @@ func uniqueURL(for name: String, in folder: URL) -> URL {
 func transfer(_ sources: [URL], to folder: URL, _ operation: FileOperation) throws {
     let folderPath = folder.standardizedFileURL.path
     for source in sources.map(\.standardizedFileURL) {
+        guard source.isFileURL, source.path.hasPrefix("/") else {
+            throw FileOperationError(errorDescription: "「\(source.absoluteString)」はファイルのパスとして扱えません")
+        }
         if source.path == folderPath { continue }
         if operation == .move && source.deletingLastPathComponent().path == folderPath { continue }
         if folderPath.hasPrefix(source.path + "/") {
@@ -81,6 +84,13 @@ enum FileOperations {
     static func drop(_ sources: [URL], into folder: URL) {
         let copies = NSEvent.modifierFlags.contains(.option) || !sources.allSatisfy { isSameVolume($0, folder) }
         perform(sources, to: folder, copies ? .copy : .move)
+    }
+
+    static func copy(_ urls: [URL], cut: Bool) {
+        guard !urls.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects(urls as [NSURL])
+        cutPaths = cut ? Set(urls.map(\.path)) : []
     }
 
     static func paste(into current: URL, selectedFolder: URL?) {

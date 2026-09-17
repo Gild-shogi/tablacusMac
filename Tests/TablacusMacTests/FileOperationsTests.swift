@@ -64,3 +64,14 @@ private func makeTemporaryFolder() throws -> URL {
     let names = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
     #expect(names == ["a.txt", "a-1.txt", "a-2.txt", "report-2024.pdf", "report-2024-1.pdf"])
 }
+
+@Test func パスを持たないURLは自分自身への移動と誤判定せず_そのURLを示すエラーになる() throws {
+    let root = try makeTemporaryFolder()
+    let pathless = try #require(URL(string: "file://localhost"))
+
+    #expect {
+        try transfer([pathless], to: root, .copy)
+    } throws: { error in
+        (error as? FileOperationError)?.errorDescription?.contains("file://localhost") == true
+    }
+}

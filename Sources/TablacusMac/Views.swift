@@ -174,9 +174,6 @@ struct TabContent: View {
                     Button("ゴミ箱に入れる") { FileOperations.trash(Array(ids)) }
                 }
             } primaryAction: { tab.open($0) }
-            .onCopyCommand { providers(cut: false) }
-            .onCutCommand { providers(cut: true) }
-            .onPasteCommand(of: [.fileURL]) { _ in FileOperations.paste(into: tab.url, selectedFolder: tab.selectedFolder) }
             // Finder と同じく Return は名前変更、⌘↓ で開く
             .onKeyPress(keys: [.return, Self.f2]) { _ in
                 guard tab.selection.count == 1 else { return .ignored }
@@ -218,11 +215,6 @@ struct TabContent: View {
     private func copyPaths(_ urls: [URL]) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(urls.map(\.path).sorted().joined(separator: "\n"), forType: .string)
-    }
-
-    private func providers(cut: Bool) -> [NSItemProvider] {
-        FileOperations.cutPaths = cut ? Set(tab.selection.map(\.path)) : []
-        return tab.selection.map { NSItemProvider(object: $0 as NSURL) }
     }
 
     private func openTypedPath() {
