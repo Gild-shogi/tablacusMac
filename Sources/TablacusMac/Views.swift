@@ -185,13 +185,9 @@ struct TabContent: View {
                 tab.open(tab.selection)
                 return .handled
             }
-            // Tablacus（Explorer）に合わせ ⌫ は上の階層へ。⌘⌫ と ⌦ はゴミ箱
-            .onKeyPress(keys: [.delete, .deleteForward]) { press in
-                if press.key == .delete && !press.modifiers.contains(.command) {
-                    tab.goUp()
-                } else {
-                    FileOperations.trash(Array(tab.selection))
-                }
+            .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+                guard !tab.selection.isEmpty else { return .ignored }
+                FileOperations.trash(Array(tab.selection))
                 return .handled
             }
             .focused(focus, equals: pane.id)
