@@ -1,4 +1,18 @@
 import AppKit
+import UniformTypeIdentifiers
+
+/// ドラッグ&ドロップの不具合を追うための記録。~/Library/Logs/TablacusMac.log
+func debugLog(_ message: String) {
+    let line = "\(Date().formatted(.iso8601)) \(message)\n"
+    let url = URL.homeDirectory.appending(path: "Library/Logs/TablacusMac.log")
+    if let handle = try? FileHandle(forWritingTo: url) {
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data(line.utf8))
+    } else {
+        try? Data(line.utf8).write(to: url)
+    }
+}
 
 enum FileOperation: Sendable {
     case copy, move
@@ -76,13 +90,34 @@ enum FileOperations {
                 try transfer(sources, to: folder, operation)
             } catch {
                 let message = error.localizedDescription
+                debugLog("transfer failed: \(message)")
                 await showError(message)
             }
         }
     }
 
+    /// SwiftUI の Transferable 経由ではドロップを受け取れないことがあるため、従来の NSItemProvider から読む
+    static func drop(_ providers: [NSItemProvider], into folder: URL, from source: String) {
+        debugLog("drop from \(source) into \(folder.path) providers=\(providers.count)")
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                let data: Data? = await withCheckedContinuation { continuation in
+                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                        continuation.resume(returning: data)
+                    }
+                }
+                if let data, let url = URL(dataRepresentation: data, relativeTo: nil) { urls.append(url) }
+            }
+            debugLog("drop resolved urls=\(urls.map(\.path))")
+            drop(urls, into: folder)
+        }
+    }
+
     static func drop(_ sources: [URL], into folder: URL) {
+        guard !sources.isEmpty else { return }
         let copies = NSEvent.modifierFlags.contains(.option) || !sources.allSatisfy { isSameVolume($0, folder) }
+        debugLog("drop \(copies ? "copy" : "move") \(sources.map(\.lastPathComponent)) -> \(folder.path)")
         perform(sources, to: folder, copies ? .copy : .move)
     }
 

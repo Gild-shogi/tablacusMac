@@ -97,6 +97,7 @@ struct TabContent: View {
     @State private var path = ""
     @State private var newName = ""
     @FocusState private var isFilterFocused: Bool
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -143,15 +144,24 @@ struct TabContent: View {
             } rows: {
                 ForEach(tab.visibleItems) { item in
                     TableRow(item)
-                        .draggable(item.url)
+                        .itemProvider {
+                            debugLog("drag start \(item.name)")
+                            return NSItemProvider(object: item.url as NSURL)
+                        }
                         .dropDestination(for: URL.self) { urls in
+                            debugLog("row drop onto \(item.name) urls=\(urls.map(\.path))")
                             FileOperations.drop(urls, into: item.isFolder ? item.url : tab.url)
                         }
                 }
             }
-            .dropDestination(for: URL.self) { urls, _ in
-                FileOperations.drop(urls, into: tab.url)
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                FileOperations.drop(providers, into: tab.url, from: "list")
                 return true
+            }
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 3)
+                }
             }
             .contextMenu(forSelectionType: FileItem.ID.self) { ids in
                 if ids.isEmpty {
