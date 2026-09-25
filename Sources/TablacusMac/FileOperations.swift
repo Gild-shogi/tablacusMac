@@ -96,19 +96,41 @@ enum FileOperations {
         }
     }
 
-    /// SwiftUI の Transferable 経由ではドロップを受け取れないことがあるため、従来の NSItemProvider から読む
+    /// ドラッグ元が渡すデータの形に依存しないよう、ファイルの URL そのものを書き込む
+    static func fileProvider(for url: URL) -> NSItemProvider {
+        let provider = NSItemProvider()
+        provider.suggestedName = url.lastPathComponent
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier, visibility: .all) { completion in
+            completion(Data(url.absoluteString.utf8), nil)
+            return nil
+        }
+        return provider
+    }
+
+    /// ドロップ中だけ有効。ドラッグ中のファイルはここにも載るので、取り出せなかったときの確認に使う
+    static func draggedURLs() -> [URL] {
+        let pasteboard = NSPasteboard(name: .drag)
+        return pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
     static func drop(_ providers: [NSItemProvider], into folder: URL, from source: String) {
-        debugLog("drop from \(source) into \(folder.path) providers=\(providers.count)")
+        let dragged = draggedURLs()
+        debugLog("drop from \(source) into \(folder.path) types=\(providers.map(\.registeredTypeIdentifiers)) dragged=\(dragged.map(\.path))")
         Task { @MainActor in
             var urls: [URL] = []
             for provider in providers {
-                let data: Data? = await withCheckedContinuation { continuation in
-                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                        continuation.resume(returning: data)
+                let loaded: (Data?, String?) = await withCheckedContinuation { continuation in
+                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, error in
+                        continuation.resume(returning: (data, error?.localizedDescription))
                     }
                 }
-                if let data, let url = URL(dataRepresentation: data, relativeTo: nil) { urls.append(url) }
+                if let data = loaded.0, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                    urls.append(url)
+                } else {
+                    debugLog("provider load failed bytes=\(loaded.0?.count ?? -1) error=\(loaded.1 ?? "なし")")
+                }
             }
+            if urls.isEmpty { urls = dragged }
             debugLog("drop resolved urls=\(urls.map(\.path))")
             drop(urls, into: folder)
         }

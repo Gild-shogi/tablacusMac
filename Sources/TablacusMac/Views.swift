@@ -146,11 +146,12 @@ struct TabContent: View {
                     TableRow(item)
                         .itemProvider {
                             debugLog("drag start \(item.name)")
-                            return NSItemProvider(object: item.url as NSURL)
+                            return FileOperations.fileProvider(for: item.url)
                         }
                         .dropDestination(for: URL.self) { urls in
-                            debugLog("row drop onto \(item.name) urls=\(urls.map(\.path))")
-                            FileOperations.drop(urls, into: item.isFolder ? item.url : tab.url)
+                            let dropped = urls.isEmpty ? FileOperations.draggedURLs() : urls
+                            debugLog("row drop onto \(item.name) urls=\(urls.map(\.path)) dragged=\(dropped.map(\.path))")
+                            FileOperations.drop(dropped, into: item.isFolder ? item.url : tab.url)
                         }
                 }
             }
