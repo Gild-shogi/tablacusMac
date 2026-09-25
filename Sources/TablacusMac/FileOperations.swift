@@ -96,6 +96,24 @@ enum FileOperations {
         }
     }
 
+    /// SwiftUI がドラッグ用に書き出す URL はこの環境では中身が空になるため、開始時のファイルを覚えておいて使う
+    static var draggingURLs: [URL] = []
+
+    static func beginDrag(_ urls: [URL], representing url: URL) -> NSItemProvider {
+        draggingURLs = urls
+        debugLog("drag start \(urls.map(\.lastPathComponent))")
+        return fileProvider(for: url)
+    }
+
+    /// SwiftUI・ドラッグ用ペーストボード・アプリ内の記録の順に、パスとして使えるものを採る
+    static func resolveDropped(_ candidates: [[URL]]) -> [URL] {
+        for list in candidates {
+            let valid = list.filter { $0.isFileURL && $0.path.hasPrefix("/") }
+            if !valid.isEmpty { return valid }
+        }
+        return []
+    }
+
     /// ドラッグ元が渡すデータの形に依存しないよう、ファイルの URL そのものを書き込む
     static func fileProvider(for url: URL) -> NSItemProvider {
         let provider = NSItemProvider()
@@ -130,13 +148,14 @@ enum FileOperations {
                     debugLog("provider load failed bytes=\(loaded.0?.count ?? -1) error=\(loaded.1 ?? "なし")")
                 }
             }
-            if urls.isEmpty { urls = dragged }
-            debugLog("drop resolved urls=\(urls.map(\.path))")
-            drop(urls, into: folder)
+            let resolved = resolveDropped([urls, dragged, draggingURLs])
+            debugLog("drop resolved urls=\(resolved.map(\.path))")
+            drop(resolved, into: folder)
         }
     }
 
     static func drop(_ sources: [URL], into folder: URL) {
+        draggingURLs = []
         guard !sources.isEmpty else { return }
         let copies = NSEvent.modifierFlags.contains(.option) || !sources.allSatisfy { isSameVolume($0, folder) }
         debugLog("drop \(copies ? "copy" : "move") \(sources.map(\.lastPathComponent)) -> \(folder.path)")

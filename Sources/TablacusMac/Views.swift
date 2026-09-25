@@ -145,12 +145,13 @@ struct TabContent: View {
                 ForEach(tab.visibleItems) { item in
                     TableRow(item)
                         .itemProvider {
-                            debugLog("drag start \(item.name)")
-                            return FileOperations.fileProvider(for: item.url)
+                            // 選択中の項目をドラッグしたときは選択分をまとめて運ぶ
+                            let urls = tab.selection.contains(item.id) ? Array(tab.selection) : [item.url]
+                            return FileOperations.beginDrag(urls, representing: item.url)
                         }
                         .dropDestination(for: URL.self) { urls in
-                            let dropped = urls.isEmpty ? FileOperations.draggedURLs() : urls
-                            debugLog("row drop onto \(item.name) urls=\(urls.map(\.path)) dragged=\(dropped.map(\.path))")
+                            let dropped = FileOperations.resolveDropped([urls, FileOperations.draggedURLs(), FileOperations.draggingURLs])
+                            debugLog("row drop onto \(item.name) swiftui=\(urls.map(\.path)) resolved=\(dropped.map(\.path))")
                             FileOperations.drop(dropped, into: item.isFolder ? item.url : tab.url)
                         }
                 }

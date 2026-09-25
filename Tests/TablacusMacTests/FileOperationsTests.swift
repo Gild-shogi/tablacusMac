@@ -75,3 +75,14 @@ private func makeTemporaryFolder() throws -> URL {
         (error as? FileOperationError)?.errorDescription?.contains("file://localhost") == true
     }
 }
+
+@MainActor
+@Test func ドロップ元の候補はパスが空のものを捨てて_使える最初の候補を選ぶ() throws {
+    let pathless = try #require(URL(string: "file://localhost"))
+    let real = URL(fileURLWithPath: "/Users/me/a.txt")
+    let remembered = URL(fileURLWithPath: "/Users/me/b.txt")
+
+    #expect(FileOperations.resolveDropped([[pathless], [real], [remembered]]) == [real])
+    #expect(FileOperations.resolveDropped([[], [pathless], [remembered]]) == [remembered])
+    #expect(FileOperations.resolveDropped([[], [pathless]]).isEmpty)
+}
