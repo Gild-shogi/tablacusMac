@@ -203,6 +203,8 @@ struct TabContent: View {
                 Button("ゴミ箱に入れる") { FileOperations.trash(Array(ids)) }
             }
         } primaryAction: { tab.open($0) }
+        // Tablacus Explorer と同じく、空欄のダブルクリックで上の階層へ
+        .background(BlankDoubleClick { tab.goUp() })
         // Finder と同じく Return は名前変更、⌘↓ で開く
         .onKeyPress(keys: [.return, Self.f2]) { _ in
             guard tab.selection.count == 1 else { return .ignored }
@@ -248,5 +250,45 @@ struct FileIcon: View {
         Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
             .resizable()
             .frame(width: 16, height: 16)
+    }
+}
+
+/// SwiftUI の Table は行の無い場所のダブルクリックを primaryAction に渡さないため、AppKit のイベントで拾う
+struct BlankDoubleClick: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> MonitorView { MonitorView() }
+
+    func updateNSView(_ view: MonitorView, context: Context) { view.action = action }
+
+    final class MonitorView: NSView {
+        var action: () -> Void = {}
+        private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                // 移動後の一覧に同じクリックが届くと、カーソル下の項目を開いてしまうため捨てる
+                guard event.clickCount == 2, let self, self.isBlank(at: event) else { return event }
+                self.action()
+                return nil
+            }
+        }
+
+        private func isBlank(at event: NSEvent) -> Bool {
+            guard event.window === window, let contentView = window?.contentView,
+                  bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
+            var hit = contentView.hitTest(contentView.convert(event.locationInWindow, from: nil))
+            // 行が少ないと表は行の高さまでしかなく、その下はスクロール領域が直接受ける
+            while let view = hit {
+                if view is NSTableHeaderView || view is NSScroller { return false }
+                let table = view as? NSTableView ?? (view as? NSScrollView)?.documentView as? NSTableView
+                if let table { return table.row(at: table.convert(event.locationInWindow, from: nil)) == -1 }
+                hit = view.superview
+            }
+            return false
+        }
     }
 }
