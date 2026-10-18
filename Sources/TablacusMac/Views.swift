@@ -202,7 +202,15 @@ struct TabContent: View {
                     .disabled(ids.count != 1)
                 Button("ゴミ箱に入れる") { FileOperations.trash(Array(ids)) }
             }
-        } primaryAction: { tab.open($0) }
+        } primaryAction: { ids in
+            // Finder と同じく ⌘ を押しながらのダブルクリックでフォルダを新しいタブで開く
+            let folders = tab.folders(in: ids)
+            if NSEvent.modifierFlags.contains(.command), !folders.isEmpty {
+                folders.forEach { pane.newTab($0) }
+            } else {
+                tab.open(ids)
+            }
+        }
         // Tablacus Explorer と同じく、空欄のダブルクリックで上の階層へ
         .background(BlankDoubleClick { tab.goUp() })
         // Finder と同じく Return は名前変更、⌘↓ で開く
