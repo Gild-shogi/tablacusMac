@@ -162,19 +162,7 @@ struct TabContent: View {
                 Text(item.isFolder ? "" : item.size.formatted(.byteCount(style: .file)))
             }
         } rows: {
-            ForEach(tab.visibleItems) { item in
-                TableRow(item)
-                    .itemProvider {
-                        // 選択中の項目をドラッグしたときは選択分をまとめて運ぶ
-                        let urls = tab.selection.contains(item.id) ? Array(tab.selection) : [item.url]
-                        return FileOperations.beginDrag(urls, representing: item.url)
-                    }
-                    .dropDestination(for: URL.self) { urls in
-                        let dropped = FileOperations.resolveDropped([urls, FileOperations.draggedURLs(), FileOperations.draggingURLs])
-                        debugLog("row drop onto \(item.name) swiftui=\(urls.map(\.path)) resolved=\(dropped.map(\.path))")
-                        FileOperations.drop(dropped, into: item.isFolder ? item.url : tab.url)
-                    }
-            }
+            ForEach(tab.visibleItems) { FileRow(tab: tab, item: $0) }
             // 行より下の空欄や行間へのドロップは、表の「行の挿入」として届く
             .dropDestination(for: URL.self) { index, urls in
                 let dropped = FileOperations.resolveDropped([urls, FileOperations.draggedURLs(), FileOperations.draggingURLs])
@@ -248,6 +236,38 @@ struct TabContent: View {
             NSSound.beep()
             path = tab.url.path
         }
+    }
+}
+
+/// フォルダは Finder のリスト表示のように一覧の中で開ける
+struct FileRow: TableRowContent {
+    let tab: Tab
+    let item: FileItem
+
+    @TableRowBuilder<FileItem> var tableRowBody: some TableRowContent<FileItem> {
+        if item.isFolder {
+            DisclosureTableRow(item, isExpanded: Binding(get: { tab.expanded.contains(item.url) }, set: { tab.setExpanded(item.url, $0) })) {
+                ForEach(tab.children[item.url] ?? []) { FileRow(tab: tab, item: $0) }
+            }
+            .fileActions(tab: tab, item: item)
+        } else {
+            TableRow(item).fileActions(tab: tab, item: item)
+        }
+    }
+}
+
+extension TableRowContent<FileItem> {
+    func fileActions(tab: Tab, item: FileItem) -> some TableRowContent<FileItem> {
+        itemProvider {
+                // 選択中の項目をドラッグしたときは選択分をまとめて運ぶ
+                let urls = tab.selection.contains(item.id) ? Array(tab.selection) : [item.url]
+                return FileOperations.beginDrag(urls, representing: item.url)
+            }
+            .dropDestination(for: URL.self) { urls in
+                let dropped = FileOperations.resolveDropped([urls, FileOperations.draggedURLs(), FileOperations.draggingURLs])
+                debugLog("row drop onto \(item.name) swiftui=\(urls.map(\.path)) resolved=\(dropped.map(\.path))")
+                FileOperations.drop(dropped, into: item.isFolder ? item.url : item.url.deletingLastPathComponent())
+            }
     }
 }
 

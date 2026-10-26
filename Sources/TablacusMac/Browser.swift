@@ -56,6 +56,9 @@ final class Tab: Identifiable {
     let id = UUID()
     private(set) var history: History
     private(set) var items: [FileItem] = []
+    /// Finder のリスト表示と同じく、一覧の中で開いて中身を見せているフォルダ
+    private(set) var expanded = Set<URL>()
+    private(set) var children: [URL: [FileItem]] = [:]
     private(set) var error: String?
     var selection = Set<FileItem.ID>()
     var renaming: URL?
@@ -65,9 +68,12 @@ final class Tab: Identifiable {
         didSet { selection.formIntersection(visibleItems.map(\.id)) }
     }
     // deinit から止めるため。DispatchSource 自体はスレッドセーフ
-    @ObservationIgnored nonisolated(unsafe) private var watcher: DispatchSourceFileSystemObject?
+    @ObservationIgnored nonisolated(unsafe) private var watchers: [URL: DispatchSourceFileSystemObject] = [:]
     var sortOrder = [KeyPathComparator(\FileItem.name, comparator: .localizedStandard)] {
-        didSet { items.sort(using: sortOrder) }
+        didSet {
+            items.sort(using: sortOrder)
+            for url in children.keys { children[url]?.sort(using: sortOrder) }
+        }
     }
 
     init(_ url: URL) {
@@ -75,7 +81,7 @@ final class Tab: Identifiable {
         didNavigate()
     }
 
-    deinit { watcher?.cancel() }
+    deinit { watchers.values.forEach { $0.cancel() } }
 
     var url: URL { history.current }
     var title: String { FileManager.default.displayName(atPath: url.path) }
@@ -87,15 +93,52 @@ final class Tab: Identifiable {
 
     func reload() {
         do {
-            // ponytail: メインスレッドで同期列挙。数万件のフォルダで固まるようなら Task.detached へ移す
-            items = try FileManager.default
-                .contentsOfDirectory(at: url, includingPropertiesForKeys: Array(FileItem.keys))
-                .map(FileItem.init)
-                .sorted(using: sortOrder)
+            items = try contents(of: url)
             error = nil
         } catch {
             items = []
             self.error = error.localizedDescription
+        }
+        // 消えた・読めなくなったフォルダは閉じる
+        children = expanded.reduce(into: [:]) { $0[$1] = try? contents(of: $1) }
+        expanded = Set(children.keys)
+        watch()
+    }
+
+    // ponytail: メインスレッドで同期列挙。数万件のフォルダで固まるようなら Task.detached へ移す
+    private func contents(of folder: URL) throws -> [FileItem] {
+        try FileManager.default
+            .contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(FileItem.keys))
+            .map(FileItem.init)
+            .sorted(using: sortOrder)
+    }
+
+    func setExpanded(_ folder: URL, _ isExpanded: Bool) {
+        if isExpanded {
+            expanded.insert(folder)
+        } else {
+            // 中で開いていたフォルダも閉じ、隠れた項目が選択に残らないようにする
+            expanded = expanded.filter { $0 != folder && !$0.path.hasPrefix(folder.path + "/") }
+            selection = selection.filter { !$0.path.hasPrefix(folder.path + "/") }
+        }
+        reload()
+    }
+
+    /// 表示中のフォルダと開いているフォルダの変更を監視し、一覧を読み直す
+    private func watch() {
+        let folders = expanded.union([url])
+        for (folder, source) in watchers where !folders.contains(folder) {
+            source.cancel()
+            watchers[folder] = nil
+        }
+        for folder in folders where watchers[folder] == nil {
+            let descriptor = Darwin.open(folder.path, O_EVTONLY)
+            guard descriptor >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: .main)
+            source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.reload() } }
+            source.setCancelHandler { Darwin.close(descriptor) }
+            source.resume()
+            watchers[folder] = source
         }
     }
 
@@ -111,15 +154,8 @@ final class Tab: Identifiable {
     private func didNavigate() {
         filter = ""
         selection = []
+        expanded = []
         reload()
-        watcher?.cancel()
-        let descriptor = Darwin.open(url.path, O_EVTONLY)
-        guard descriptor >= 0 else { watcher = nil; return }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: .main)
-        source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.reload() } }
-        source.setCancelHandler { Darwin.close(descriptor) }
-        source.resume()
-        watcher = source
     }
 
     func createFolder() {
@@ -152,7 +188,7 @@ final class Tab: Identifiable {
     var selectedFolder: URL? { selection.count == 1 ? folders(in: selection).first : nil }
 
     func folders(in ids: Set<FileItem.ID>) -> [URL] {
-        items.filter { ids.contains($0.id) && $0.isFolder }.map(\.url)
+        (items + children.values.joined()).filter { ids.contains($0.id) && $0.isFolder }.map(\.url)
     }
 
     func open(_ ids: Set<FileItem.ID>) {
