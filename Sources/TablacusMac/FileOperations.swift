@@ -114,14 +114,10 @@ enum FileOperations {
         return []
     }
 
-    /// ドラッグ元が渡すデータの形に依存しないよう、ファイルの URL そのものを書き込む
+    /// 遅延のデータ表現だと他のアプリへは中身が届かないため、NSURL を渡して AppKit に Finder と同じ形で書かせる
     static func fileProvider(for url: URL) -> NSItemProvider {
-        let provider = NSItemProvider()
+        let provider = NSItemProvider(object: url as NSURL)
         provider.suggestedName = url.lastPathComponent
-        provider.registerDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier, visibility: .all) { completion in
-            completion(Data(url.absoluteString.utf8), nil)
-            return nil
-        }
         return provider
     }
 
