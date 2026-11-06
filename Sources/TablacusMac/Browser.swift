@@ -51,6 +51,30 @@ struct FileItem: Identifiable {
     }
 }
 
+/// 最後に選んだ並び順。新しいタブや再起動後のタブもこの順で開く
+@MainActor
+enum SortPreference {
+    private static let key = "sortOrder"
+    private static let columns: [(name: String, comparator: KeyPathComparator<FileItem>)] = [
+        ("name", KeyPathComparator(\.name, comparator: .localizedStandard)),
+        ("modified", KeyPathComparator(\.modified)),
+        ("kind", KeyPathComparator(\.kind, comparator: .localizedStandard)),
+        ("size", KeyPathComparator(\.size)),
+    ]
+
+    static func load(_ defaults: UserDefaults = .standard) -> [KeyPathComparator<FileItem>] {
+        let saved = defaults.dictionary(forKey: key)
+        var comparator = columns.first { $0.name == saved?["column"] as? String }?.comparator ?? columns[0].comparator
+        if saved?["reverse"] as? Bool == true { comparator.order = .reverse }
+        return [comparator]
+    }
+
+    static func save(_ order: [KeyPathComparator<FileItem>], _ defaults: UserDefaults = .standard) {
+        guard let first = order.first, let column = columns.first(where: { $0.comparator.keyPath == first.keyPath }) else { return }
+        defaults.set(["column": column.name, "reverse": first.order == .reverse], forKey: key)
+    }
+}
+
 @Observable @MainActor
 final class Tab: Identifiable {
     let id = UUID()
@@ -69,8 +93,9 @@ final class Tab: Identifiable {
     }
     // deinit から止めるため。DispatchSource 自体はスレッドセーフ
     @ObservationIgnored nonisolated(unsafe) private var watchers: [URL: DispatchSourceFileSystemObject] = [:]
-    var sortOrder = [KeyPathComparator(\FileItem.name, comparator: .localizedStandard)] {
+    var sortOrder = SortPreference.load() {
         didSet {
+            SortPreference.save(sortOrder)
             items.sort(using: sortOrder)
             for url in children.keys { children[url]?.sort(using: sortOrder) }
         }
