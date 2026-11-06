@@ -75,6 +75,11 @@ enum SortPreference {
     }
 }
 
+/// メニューから入力欄へフォーカスを移すときの行き先
+enum Field {
+    case path, filter
+}
+
 @Observable @MainActor
 final class Tab: Identifiable {
     let id = UUID()
@@ -86,7 +91,7 @@ final class Tab: Identifiable {
     private(set) var error: String?
     var selection = Set<FileItem.ID>()
     var renaming: URL?
-    var wantsFilterFocus = false
+    var wantsFocus: Field?
     var filter = "" {
         // 見えない項目を選択したままゴミ箱などの操作をしないよう、絞り込みで隠れたら選択から外す
         didSet { selection.formIntersection(visibleItems.map(\.id)) }
@@ -246,6 +251,12 @@ final class Pane: Identifiable {
         let tab = Tab(url ?? selected.url)
         tabs.append(tab)
         selectedID = tab.id
+    }
+
+    /// Finder の ⇧⌘[ / ⇧⌘] と同じく、端まで行ったら反対側へ回る
+    func selectTab(offset: Int) {
+        guard let index = tabs.firstIndex(where: { $0.id == selectedID }) else { return }
+        selectedID = tabs[(index + offset + tabs.count) % tabs.count].id
     }
 
     func close(_ tab: Tab) {
