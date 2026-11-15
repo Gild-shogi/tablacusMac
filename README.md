@@ -1,6 +1,17 @@
 # TablacusMac
 
-Tablacus Explorer を参考にした、macOS 向けのタブ型ファイラーです。SwiftUI で作っており、外部依存はありません。
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-green)
+
+[Tablacus Explorer](https://tablacus.github.io/explorer.html) を参考にした、macOS 向けのタブ型ファイラーです。SwiftUI で作っており、外部依存はありません。
+
+> [!NOTE]
+> 本プロジェクトは非公式のプロジェクトで、Tablacus Explorer およびその作者とは関係ありません。
+
+![タブとサイドバーを表示した画面](docs/images/main.png)
+
+2×2 の分割レイアウトでは、4つのフォルダを並べて操作できます。
+
+![2×2 の分割レイアウト](docs/images/layout-grid.png)
 
 ## 主な機能
 
@@ -14,6 +25,7 @@ Tablacus Explorer を参考にした、macOS 向けのタブ型ファイラー�
 - 右クリックメニューの「パスをコピー」「Finderで表示」「WezTermで開く」
 - 前回終了時のレイアウト・タブ・操作中のペインを起動時に復元する
 - 隠しファイルも常に表示する
+- フォルダの開閉（▶ / → / ←）、クイックルック、情報を見る、複製、エイリアス作成、圧縮など Finder の主なメニューとキー操作
 
 ## 動作環境
 
@@ -42,10 +54,19 @@ make app    # TablacusMac.app を作る
 | カット / コピー / ペースト | ⌘X / ⌘C / ⌘V |
 | すべてを選択 | ⌘A |
 | 絞り込み | ⌘F |
-| 開く | ⌘↓ |
+| 開く | ⌘↓ / ⌘O |
+| フォルダを開く / 閉じる（一覧の中で） | → / ← |
+| クイックルック | Space / ⌘Y |
+| 情報を見る | ⌘I |
+| 複製 / エイリアスを作成 | ⌘D / ⌘L |
+| 項目をここに移動 / パス名をコピー | ⌥⌘V / ⌥⌘C |
 | 名前を変更 | Return / F2 |
-| ゴミ箱に入れる | ⌫ |
+| ゴミ箱に入れる | ⌫ / ⌘⌫ |
 | 戻る / 進む / 上の階層 | ⌘[ / ⌘] / ⌘↑ |
+| 前のタブ / 次のタブ | ⇧⌘[ / ⇧⌘] |
+| フォルダへ移動（パス欄へ） | ⇧⌘G |
+| 書類 / デスクトップ / ダウンロード / ホーム | ⇧⌘O / ⇧⌘D / ⌥⌘L / ⇧⌘H |
+| iCloud Drive / アプリケーション / ユーティリティ | ⇧⌘I / ⇧⌘A / ⇧⌘U |
 | 再読み込み | ⌘R |
 | レイアウトの切り替え | ⌘⌥1〜5 |
 
@@ -56,3 +77,8 @@ make app    # TablacusMac.app を作る
 | `Sources/TablacusMac/` | アプリ本体 |
 | `Tests/TablacusMacTests/` | テスト（Swift Testing） |
 | `Resources/` | アプリアイコン |
+| `docs/images/` | README のスクリーンショット |
+
+## ライセンス
+
+[MIT License](LICENSE)

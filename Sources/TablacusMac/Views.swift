@@ -48,6 +48,7 @@ struct BrowserContent: View {
         }
         .navigationTitle(browser.tab.title)
         .focusedSceneValue(\.browser, browser)
+        .background(QuickLookResponder())
         // サイドバーやメニューの操作先として、最後にフォーカスしたペインを覚えておく
         .onChange(of: focusedPane) { if let focusedPane { browser.activeID = focusedPane } }
     }
@@ -96,7 +97,7 @@ struct TabContent: View {
     let focus: FocusState<Pane.ID?>.Binding
     @State private var path = ""
     @State private var newName = ""
-    @FocusState private var isFilterFocused: Bool
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -109,11 +110,12 @@ struct TabContent: View {
             fileTable
         }
         .onChange(of: tab.url, initial: true) { path = tab.url.path }
-        .onChange(of: tab.wantsFilterFocus) {
-            guard tab.wantsFilterFocus else { return }
-            isFilterFocused = true
-            tab.wantsFilterFocus = false
+        .onChange(of: tab.wantsFocus) {
+            guard let field = tab.wantsFocus else { return }
+            focusedField = field
+            tab.wantsFocus = nil
         }
+        .onChange(of: tab.selection) { QuickLook.update(Array(tab.selection)) }
         .onChange(of: tab.renaming) { newName = tab.renaming?.lastPathComponent ?? "" }
         .alert("名前を変更", isPresented: Binding(get: { tab.renaming != nil }, set: { if !$0 { tab.renaming = nil } })) {
             TextField("名前", text: $newName)
@@ -135,11 +137,12 @@ struct TabContent: View {
                 .disabled(tab.url.path == "/")
             TextField("パス", text: $path)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .path)
                 .onSubmit(openTypedPath)
             TextField("絞り込み（⌘F）", text: $tab.filter)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 180)
-                .focused($isFilterFocused)
+                .focused($focusedField, equals: .filter)
                 .onSubmit { focus.wrappedValue = pane.id }
                 .onExitCommand {
                     tab.filter = ""
@@ -175,7 +178,7 @@ struct TabContent: View {
                 Button("貼り付け") { FileOperations.paste(into: tab.url, selectedFolder: nil) }
                 Button("新規フォルダ") { tab.createFolder() }
                 Divider()
-                Button("パスをコピー") { copyPaths([tab.url]) }
+                Button("パスをコピー") { FileOperations.copyPaths([tab.url]) }
                 Button("WezTermで開く") { WezTerm.open(tab.url) }
             } else {
                 Button("開く") { tab.open(ids) }
@@ -183,7 +186,15 @@ struct TabContent: View {
                     .disabled(tab.folders(in: ids).isEmpty)
                 Button("Finderで表示") { NSWorkspace.shared.activateFileViewerSelecting(Array(ids)) }
                 Divider()
-                Button("パスをコピー") { copyPaths(Array(ids)) }
+                Button("情報を見る") { FileOperations.showInfo(Array(ids)) }
+                Button("圧縮") { if let url = ids.first { FileOperations.compress(url) } }
+                    .disabled(ids.count != 1)
+                Button("複製") { FileOperations.duplicate(Array(ids)) }
+                Button("エイリアスを作成") { FileOperations.makeAlias(Array(ids)) }
+                Button("クイックルック") { QuickLook.toggle(Array(ids)) }
+                Divider()
+                Button("コピー") { FileOperations.copy(Array(ids), cut: false) }
+                Button("パスをコピー") { FileOperations.copyPaths(Array(ids)) }
                 Button("WezTermで開く") { WezTerm.open(ids.count == 1 ? tab.folders(in: ids).first ?? tab.url : tab.url) }
                 Divider()
                 Button("名前を変更") { tab.renaming = ids.first }
@@ -212,6 +223,18 @@ struct TabContent: View {
             tab.open(tab.selection)
             return .handled
         }
+        // Finder のリスト表示と同じく → / ← でフォルダを開閉する
+        .onKeyPress(keys: [.rightArrow, .leftArrow]) { press in
+            let folders = tab.folders(in: tab.selection)
+            guard press.modifiers.isDisjoint(with: [.command, .option, .shift, .control]), !folders.isEmpty else { return .ignored }
+            folders.forEach { tab.setExpanded($0, press.key == .rightArrow) }
+            return .handled
+        }
+        .onKeyPress(.space) {
+            guard !tab.selection.isEmpty else { return .ignored }
+            QuickLook.toggle(Array(tab.selection))
+            return .handled
+        }
         .onKeyPress(keys: [.delete, .deleteForward]) { _ in
             guard !tab.selection.isEmpty else { return .ignored }
             FileOperations.trash(Array(tab.selection))
@@ -221,11 +244,6 @@ struct TabContent: View {
     }
 
     private static let f2 = KeyEquivalent(Character(UnicodeScalar(UInt32(NSF2FunctionKey))!))
-
-    private func copyPaths(_ urls: [URL]) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(urls.map(\.path).sorted().joined(separator: "\n"), forType: .string)
-    }
 
     private func openTypedPath() {
         let expanded = (path as NSString).expandingTildeInPath

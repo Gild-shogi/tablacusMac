@@ -165,31 +165,78 @@ enum FileOperations {
         cutPaths = cut ? Set(urls.map(\.path)) : []
     }
 
-    static func paste(into current: URL, selectedFolder: URL?) {
+    /// move は Finder の ⌥⌘V。⌘C した項目でも移動する
+    static func paste(into current: URL, selectedFolder: URL?, move: Bool = false) {
         let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
         guard !urls.isEmpty else { return }
-        let isCut = Set(urls.map(\.path)) == cutPaths
+        let isCut = move || Set(urls.map(\.path)) == cutPaths
         if isCut { cutPaths = [] }
         perform(urls, to: pasteDestination(for: urls, current: current, selectedFolder: selectedFolder), isCut ? .move : .copy)
     }
 
+    static func copyPaths(_ urls: [URL]) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(urls.map(\.path).sorted().joined(separator: "\n"), forType: .string)
+    }
+
+    /// 開いたフォルダの中の項目も選べるため、それぞれ元のフォルダに複製する
+    static func duplicate(_ urls: [URL]) {
+        for (folder, sources) in Dictionary(grouping: urls, by: { $0.deletingLastPathComponent() }) {
+            perform(sources, to: folder, .copy)
+        }
+    }
+
+    /// ponytail: 1項目だけ。複数をまとめた「アーカイブ.zip」が要るなら一時フォルダに集めてから ditto する
+    static func compress(_ url: URL) {
+        let archive = uniqueURL(for: url.lastPathComponent + ".zip", in: url.deletingLastPathComponent())
+        run("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", url.path, archive.path], failure: "圧縮できませんでした")
+    }
+
+    static func showInfo(_ urls: [URL]) {
+        runFinder("""
+            tell application "Finder"
+                activate
+                repeat with p in argv
+                    open information window of ((POSIX file (contents of p)) as alias)
+                end repeat
+            end tell
+            """, urls, failure: "情報を表示できませんでした")
+    }
+
+    static func makeAlias(_ urls: [URL]) {
+        runFinder("""
+            tell application "Finder"
+                repeat with p in argv
+                    set original to (POSIX file (contents of p)) as alias
+                    make new alias file at (container of original) to original
+                end repeat
+            end tell
+            """, urls, failure: "エイリアスを作成できませんでした")
+    }
+
     /// NSWorkspace.recycle は複数件を一度に捨てると先頭の1件しか「戻す」が効かないため Finder に任せる
     static func trash(_ urls: [URL]) {
+        runFinder("""
+            set targets to {}
+            repeat with p in argv
+                set end of targets to (POSIX file (contents of p)) as alias
+            end repeat
+            tell application "Finder" to delete targets
+            """, urls, failure: "ゴミ箱に移動できませんでした")
+    }
+
+    /// script の中では argv で各項目のパスを受け取る
+    private static func runFinder(_ script: String, _ urls: [URL], failure: String) {
         guard !urls.isEmpty else { return }
-        let script = """
-            on run argv
-                set targets to {}
-                repeat with p in argv
-                    set end of targets to (POSIX file (contents of p)) as alias
-                end repeat
-                tell application "Finder" to delete targets
-            end run
-            """
+        run("/usr/bin/osascript", ["-e", "on run argv\n\(script)\nend run"] + urls.map(\.path), failure: failure)
+    }
+
+    private static func run(_ executable: String, _ arguments: [String], failure: String) {
         Task.detached {
             let process = Process()
             let stderr = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", script] + urls.map(\.path)
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
             process.standardOutput = FileHandle.nullDevice
             process.standardError = stderr
             do {
@@ -197,7 +244,7 @@ enum FileOperations {
                 process.waitUntilExit()
                 if process.terminationStatus != 0 {
                     let message = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                    await showError("ゴミ箱に移動できませんでした\n\(message)")
+                    await showError("\(failure)\n\(message)")
                 }
             } catch {
                 let message = error.localizedDescription
