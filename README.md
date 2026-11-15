@@ -1,6 +1,17 @@
 # TablacusMac
 
-Tablacus Explorer を参考にした、macOS 向けのタブ型ファイラーです。SwiftUI で作っており、外部依存はありません。
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-green)
+
+[Tablacus Explorer](https://tablacus.github.io/explorer.html) を参考にした、macOS 向けのタブ型ファイラーです。SwiftUI で作っており、外部依存はありません。
+
+> [!NOTE]
+> 本プロジェクトは非公式のプロジェクトで、Tablacus Explorer およびその作者とは関係ありません。
+
+![タブとサイドバーを表示した画面](docs/images/main.png)
+
+2×2 の分割レイアウトでは、4つのフォルダを並べて操作できます。
+
+![2×2 の分割レイアウト](docs/images/layout-grid.png)
 
 ## 主な機能
 
@@ -66,3 +77,8 @@ make app    # TablacusMac.app を作る
 | `Sources/TablacusMac/` | アプリ本体 |
 | `Tests/TablacusMacTests/` | テスト（Swift Testing） |
 | `Resources/` | アプリアイコン |
+| `docs/images/` | README のスクリーンショット |
+
+## ライセンス
+
+[MIT License](LICENSE)
